@@ -9,3 +9,6 @@ Android GStreamer example
 GStreamer Android Universal: 1.24.3  
 Android NDK: r25c (25.2.9519653)  
 Android API target: v21 (Lollipop)
+
+Notes:  
+· add `gradle.properties` with `gstAndroidRoot = "pathTo/gstreamer-1.0-android-universal-1.24.3"`
