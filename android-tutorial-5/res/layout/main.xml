@@ -5,6 +5,16 @@
     android:gravity="center_vertical"
     android:orientation="vertical" >
 
+    <EditText
+        android:id="@+id/editTextText_url"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ems="10"
+        android:inputType="textUri"
+        android:hint="@string/url"
+        android:text="@string/defaultUrl"
+        android:autofillHints="" />
+
     <TextView
         android:id="@+id/textview_message"
         android:layout_width="match_parent"

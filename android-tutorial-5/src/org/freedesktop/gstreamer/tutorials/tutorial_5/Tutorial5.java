@@ -16,6 +16,7 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.View.OnClickListener;
+import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.SeekBar;
 import android.widget.SeekBar.OnSeekBarChangeListener;
@@ -44,8 +45,6 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
     private int desired_position;         // Position where the users wants to seek to
     private String mediaUri;              // URI of the clip being played
 
-    private final String defaultMediaUri = "https://gstreamer.freedesktop.org/data/media/sintel_trailer-480p.ogv";
-
     static private final int PICK_FILE_CODE = 1;
     private String last_folder;
 
@@ -72,11 +71,21 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
         wake_lock = pm.newWakeLock(PowerManager.FULL_WAKE_LOCK, "GStreamer tutorial 5");
         wake_lock.setReferenceCounted(false);
 
+        EditText url = this.findViewById(R.id.editTextText_url);
+
         ImageButton play = (ImageButton) this.findViewById(R.id.button_play);
         play.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
                 is_playing_desired = true;
                 wake_lock.acquire();
+                String newUri = url.getText().toString().trim();
+                if (!newUri.equals(mediaUri)) {
+                    nativePause();
+                    setCurrentPosition(0, 0);
+                    Log.i("GStreamer", "Setting URI to " + newUri);
+                    mediaUri = newUri;
+                    setMediaUri();
+                }
                 nativePlay();
             }
         });
@@ -121,7 +130,7 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
             Intent intent = getIntent();
             android.net.Uri uri = intent.getData();
             if (uri == null)
-                mediaUri = defaultMediaUri;
+                mediaUri = url.getText().toString().trim();
             else {
                 Log.i ("GStreamer", "Received URI: " + uri);
                 if (uri.getScheme().equals("content")) {
@@ -166,9 +175,9 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
     private void setMessage(final String message) {
         final TextView tv = (TextView) this.findViewById(R.id.textview_message);
         runOnUiThread (new Runnable() {
-          public void run() {
-            tv.setText(message);
-          }
+            public void run() {
+                tv.setText(message);
+            }
         });
     }
 
@@ -226,12 +235,12 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
         if (sb.isPressed()) return;
 
         runOnUiThread (new Runnable() {
-          public void run() {
-            sb.setMax(duration);
-            sb.setProgress(position);
-            updateTimeWidget();
-            sb.setEnabled(duration != 0);
-          }
+            public void run() {
+                sb.setMax(duration);
+                sb.setProgress(position);
+                updateTimeWidget();
+                sb.setEnabled(duration != 0);
+            }
         });
         this.position = position;
         this.duration = duration;
@@ -244,7 +253,7 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
     }
 
     public void surfaceChanged(SurfaceHolder holder, int format, int width,
-            int height) {
+                               int height) {
         Log.d("GStreamer", "Surface changed to format " + format + " width "
                 + width + " height " + height);
         nativeSurfaceInit (holder.getSurface());

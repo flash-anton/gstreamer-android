@@ -9,4 +9,6 @@
     <string name="location">Location</string>
     <string name="cant_read_folder">folder cannot be read</string>
     <string name="icon">Icon</string>
+    <string name="url">url</string>
+    <string name="defaultUrl">https://gstreamer.freedesktop.org/data/media/sintel_trailer-480p.ogv</string>
 </resources>
