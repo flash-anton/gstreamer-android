@@ -10,6 +10,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
 import android.os.PowerManager;
 import android.util.Log;
 import android.view.SurfaceHolder;
@@ -314,5 +315,11 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
             Log.i("GStreamer", "Setting last_folder to " + last_folder);
             setMediaUri();
         }
+    }
+
+    // Called from native code
+    private void onConnectionLost() {
+        if (is_playing_desired)
+            runOnUiThread(() -> new Handler().postDelayed(this::nativePlay, 2000));
     }
 }

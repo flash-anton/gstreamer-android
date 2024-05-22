@@ -60,6 +60,7 @@ static jmethodID set_message_method_id;
 static jmethodID set_current_position_method_id;
 static jmethodID on_gstreamer_initialized_method_id;
 static jmethodID on_media_size_changed_method_id;
+static jmethodID on_connection_lost_method_id;
 
 /*
  * Private methods
@@ -214,6 +215,15 @@ execute_seek (gint64 desired_position, CustomData * data)
   }
 }
 
+/* Callback exception cleaner */
+static void
+clear_cb_exception(JNIEnv *env) {
+  if ((*env)->ExceptionCheck (env)) {
+    GST_ERROR ("Failed to call Java method");
+    (*env)->ExceptionClear (env);
+  }
+}
+
 /* Delayed seek callback. This gets called by the timer setup in the above function. */
 static gboolean
 delayed_seek_cb (CustomData * data)
@@ -224,6 +234,29 @@ delayed_seek_cb (CustomData * data)
   return FALSE;
 }
 
+static bool
+is_connection_lost_error (GError *err) {
+  if (err->domain == GST_RESOURCE_ERROR) {
+    switch (err->code) {
+      case GST_RESOURCE_ERROR_BUSY:
+      case GST_RESOURCE_ERROR_OPEN_READ:
+      case GST_RESOURCE_ERROR_OPEN_WRITE:
+      case GST_RESOURCE_ERROR_OPEN_READ_WRITE:
+      case GST_RESOURCE_ERROR_READ:
+      case GST_RESOURCE_ERROR_WRITE:
+      case GST_RESOURCE_ERROR_SEEK:
+      case GST_RESOURCE_ERROR_SYNC:
+        return true;
+    }
+  } else if (err->domain == GST_STREAM_ERROR) {
+    switch (err->code) {
+      case GST_STREAM_ERROR_FAILED:
+        return true;
+    }
+  }
+  return false;
+}
+
 /* Retrieve errors from the bus and show them on the UI */
 static void
 error_cb (GstBus * bus, GstMessage * msg, CustomData * data)
@@ -231,8 +264,11 @@ error_cb (GstBus * bus, GstMessage * msg, CustomData * data)
   GError *err;
   gchar *debug_info;
   gchar *message_string;
+  bool is_connection_lost;
 
   gst_message_parse_error (msg, &err, &debug_info);
+  GST_DEBUG ("err domain=%d code=%d message=%s", err->domain, err->code, err->message);
+  is_connection_lost = is_connection_lost_error(err);
   message_string =
       g_strdup_printf ("Error received from element %s: %s",
       GST_OBJECT_NAME (msg->src), err->message);
@@ -242,6 +278,12 @@ error_cb (GstBus * bus, GstMessage * msg, CustomData * data)
   g_free (message_string);
   data->target_state = GST_STATE_NULL;
   gst_element_set_state (data->pipeline, GST_STATE_NULL);
+
+  if (is_connection_lost) {
+    JNIEnv *env = get_jni_env ();
+    (*env)->CallVoidMethod (env, data->app, on_connection_lost_method_id);
+    clear_cb_exception(env);
+  }
 }
 
 /* Called when the End Of the Stream is reached. Just move to the beginning of the media and pause. */
@@ -582,10 +624,12 @@ gst_native_class_init (JNIEnv * env, jclass klass)
       (*env)->GetMethodID (env, klass, "onGStreamerInitialized", "()V");
   on_media_size_changed_method_id =
       (*env)->GetMethodID (env, klass, "onMediaSizeChanged", "(II)V");
+  on_connection_lost_method_id =
+      (*env)->GetMethodID (env, klass, "onConnectionLost", "()V");
 
   if (!custom_data_field_id || !set_message_method_id
       || !on_gstreamer_initialized_method_id || !on_media_size_changed_method_id
-      || !set_current_position_method_id) {
+      || !set_current_position_method_id || !on_connection_lost_method_id) {
     /* We emit this message through the Android log instead of the GStreamer log because the later
      * has not been initialized yet.
      */
