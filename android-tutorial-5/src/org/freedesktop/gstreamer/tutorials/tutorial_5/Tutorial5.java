@@ -1,15 +1,8 @@
 package org.freedesktop.gstreamer.tutorials.tutorial_5;
 
-import java.io.File;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.TimeZone;
-
 import android.app.Activity;
 import android.content.Context;
-import android.content.Intent;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.PowerManager;
 import android.util.Log;
@@ -25,7 +18,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import org.freedesktop.gstreamer.GStreamer;
-import com.lamerman.FileDialog;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.TimeZone;
 
 public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSeekBarChangeListener {
     private native void nativeInit();     // Initialize native code, build pipeline, etc
@@ -42,12 +38,8 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
     private boolean is_playing_desired;   // Whether the user asked to go to PLAYING
     private int position;                 // Current position, reported by native code
     private int duration;                 // Current clip duration, reported by native code
-    private boolean is_local_media;       // Whether this clip is stored locally or is being streamed
     private int desired_position;         // Position where the users wants to seek to
     private String mediaUri;              // URI of the clip being played
-
-    static private final int PICK_FILE_CODE = 1;
-    private String last_folder;
 
     private PowerManager.WakeLock wake_lock;
 
@@ -84,8 +76,7 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
                     nativePause();
                     setCurrentPosition(0, 0);
                     Log.i("GStreamer", "Setting URI to " + newUri);
-                    mediaUri = newUri;
-                    setMediaUri();
+                    nativeSetUri (mediaUri = newUri);
                 }
                 nativePlay();
             }
@@ -97,15 +88,6 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
                 is_playing_desired = false;
                 wake_lock.release();
                 nativePause();
-            }
-        });
-
-        ImageButton select = (ImageButton) this.findViewById(R.id.button_select);
-        select.setOnClickListener(new OnClickListener() {
-            public void onClick(View v) {
-                Intent i = new Intent(getBaseContext(), FileDialog.class);
-                i.putExtra(FileDialog.START_PATH, last_folder);
-                startActivityForResult(i, PICK_FILE_CODE);
             }
         });
 
@@ -122,29 +104,13 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
             position = savedInstanceState.getInt("position");
             duration = savedInstanceState.getInt("duration");
             mediaUri = savedInstanceState.getString("mediaUri");
-            last_folder = savedInstanceState.getString("last_folder");
             Log.i ("GStreamer", "Activity created with saved state:");
         } else {
             is_playing_desired = false;
             position = duration = 0;
-            last_folder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES).getAbsolutePath();
-            Intent intent = getIntent();
-            android.net.Uri uri = intent.getData();
-            if (uri == null)
-                mediaUri = url.getText().toString().trim();
-            else {
-                Log.i ("GStreamer", "Received URI: " + uri);
-                if (uri.getScheme().equals("content")) {
-                    android.database.Cursor cursor = getContentResolver().query(uri, null, null, null, null);
-                    cursor.moveToFirst();
-                    mediaUri = "file://" + cursor.getString(cursor.getColumnIndex(android.provider.MediaStore.Video.Media.DATA));
-                    cursor.close();
-                } else
-                    mediaUri = uri.toString();
-            }
+            mediaUri = url.getText().toString().trim();
             Log.i ("GStreamer", "Activity created with no saved state:");
         }
-        is_local_media = false;
         Log.i ("GStreamer", "  playing:" + is_playing_desired + " position:" + position +
                 " duration: " + duration + " uri: " + mediaUri);
 
@@ -162,7 +128,6 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
         outState.putInt("position", position);
         outState.putInt("duration", duration);
         outState.putString("mediaUri", mediaUri);
-        outState.putString("last_folder", last_folder);
     }
 
     protected void onDestroy() {
@@ -182,12 +147,6 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
         });
     }
 
-    // Set the URI to play, and record whether it is a local or remote file
-    private void setMediaUri() {
-        nativeSetUri (mediaUri);
-        is_local_media = mediaUri.startsWith("file://");
-    }
-
     // Called from native code. Native code calls this once it has created its pipeline and
     // the main loop is running, so it is ready to accept commands.
     private void onGStreamerInitialized () {
@@ -195,7 +154,7 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
         Log.i ("GStreamer", "  playing:" + is_playing_desired + " position:" + position + " uri: " + mediaUri);
 
         // Restore previous playing state
-        setMediaUri ();
+        nativeSetUri (mediaUri);
         nativeSetPosition (position);
         if (is_playing_desired) {
             nativePlay();
@@ -287,8 +246,6 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
     public void onProgressChanged(SeekBar sb, int progress, boolean fromUser) {
         if (fromUser == false) return;
         desired_position = progress;
-        // If this is a local file, allow scrub seeking, this is, seek as soon as the slider is moved.
-        if (is_local_media) nativeSetPosition(desired_position);
         updateTimeWidget();
     }
 
@@ -299,22 +256,10 @@ public class Tutorial5 extends Activity implements SurfaceHolder.Callback, OnSee
 
     // The user released the Seek Bar thumb
     public void onStopTrackingTouch(SeekBar sb) {
-        // If this is a remote file, scrub seeking is probably not going to work smoothly enough.
+        // Scrub seeking is probably not going to work smoothly enough.
         // Therefore, perform only the seek when the slider is released.
-        if (!is_local_media) nativeSetPosition(desired_position);
+        nativeSetPosition(desired_position);
         if (is_playing_desired) nativePlay();
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data)
-    {
-        if (resultCode == RESULT_OK && requestCode == PICK_FILE_CODE) {
-            mediaUri = "file://" + data.getStringExtra(FileDialog.RESULT_PATH);
-            position = 0;
-            last_folder = new File (data.getStringExtra(FileDialog.RESULT_PATH)).getParent();
-            Log.i("GStreamer", "Setting last_folder to " + last_folder);
-            setMediaUri();
-        }
     }
 
     // Called from native code

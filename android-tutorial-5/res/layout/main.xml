@@ -46,14 +46,6 @@
             android:contentDescription="@string/button_stop"
             android:src="@android:drawable/ic_media_pause"
             android:text="@string/button_stop" />
-
-        <ImageButton
-            android:id="@+id/button_select"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:contentDescription="@string/button_select"
-            android:src="@android:drawable/ic_media_next"
-            android:text="@string/button_select" />
     </LinearLayout>
 
     <LinearLayout
